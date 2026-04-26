@@ -95,9 +95,9 @@ export function AcademicMode({ favorites, onToggleFavorite }: AcademicModeProps)
   }, [filteredFavoriteDeadlines]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-700/50 space-y-3">
+      <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-700/50 space-y-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center">
@@ -227,7 +227,7 @@ export function AcademicMode({ favorites, onToggleFavorite }: AcademicModeProps)
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden momentum-scroll">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden momentum-scroll">
         <AnimatePresence mode="wait">
           {viewMode === 'timeline' ? (
             <motion.div

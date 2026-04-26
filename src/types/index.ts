@@ -1,27 +1,70 @@
 export type CountdownType = 'countdown' | 'elapsed';
+export type ThemeMode = 'light' | 'dark' | 'auto';
+export type SyncMode = 'manual-icloud' | 'local-only';
 
 export interface CountdownEvent {
   id: string;
   title: string;
-  date: string; // ISO 8601 date string
+  date: string;
   type: CountdownType;
-  icon: string; // Emoji or icon name
-  color: string; // Hex color
+  icon: string;
+  color: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface AppSettings {
-  theme: 'light' | 'dark' | 'auto';
-  showInMenubar: boolean;
-  syncEnabled: boolean;
-  iCloudPath?: string;
+export interface UserProfile {
+  displayName: string;
+  deviceName: string;
 }
 
-export interface AppData {
-  version: number;
-  events: CountdownEvent[];
+export interface AppSettings {
+  theme: ThemeMode;
+  reminderDays: number;
+  syncMode: SyncMode;
+}
+
+export interface SyncMeta {
+  lastExportedAt?: string;
+  lastImportedAt?: string;
+  lastImportedFrom?: string;
+  lastSyncFileName?: string;
+  lastSnapshotAt?: string;
+}
+
+export interface AppStateV2 {
+  schemaVersion: 2;
+  profile: UserProfile;
+  personal: {
+    events: CountdownEvent[];
+  };
+  academic: {
+    favorites: string[];
+  };
   settings: AppSettings;
+  syncMeta: SyncMeta;
+}
+
+export interface ImportSnapshot {
+  createdAt: string;
+  state: AppStateV2;
+}
+
+export interface SyncPackageV1 {
+  schemaVersion: 1;
+  exportedAt: string;
+  deviceName: string;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+}
+
+export interface SyncPreview {
+  displayName: string;
+  eventCount: number;
+  favoriteCount: number;
+  reminderDays: number;
+  theme: ThemeMode;
 }
 
 export const COLOR_THEMES = [
@@ -43,34 +86,3 @@ export const DEFAULT_ICONS = [
   '🏃', '🎮', '📚', '💍', '🌸', '☀️', '🌙', '⭐',
   '🎵', '🎬', '📷', '✍️', '🔥', '💫', '🌈', '🍀',
 ] as const;
-
-export const DEFAULT_DATA: AppData = {
-  version: 1,
-  events: [
-    {
-      id: 'default-1',
-      title: '在一起',
-      date: new Date(new Date().getFullYear(), 10, 16).toISOString().split('T')[0], // Nov 16
-      type: 'elapsed',
-      icon: '❤️',
-      color: '#ff6b6b',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'default-2',
-      title: '人生进度',
-      date: new Date(new Date().getFullYear() - 23, 0, 1).toISOString().split('T')[0],
-      type: 'elapsed',
-      icon: '🌱',
-      color: '#10b981',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ],
-  settings: {
-    theme: 'auto',
-    showInMenubar: true,
-    syncEnabled: true,
-  },
-};

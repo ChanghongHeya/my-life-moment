@@ -8,10 +8,11 @@ interface AddEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (event: Omit<CountdownEvent, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onDelete?: (eventId: string) => void;
   editEvent?: CountdownEvent | null;
 }
 
-export function AddEventModal({ isOpen, onClose, onSave, editEvent }: AddEventModalProps) {
+export function AddEventModal({ isOpen, onClose, onSave, onDelete, editEvent }: AddEventModalProps) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [type, setType] = useState<CountdownType>('elapsed');
@@ -51,6 +52,12 @@ export function AddEventModal({ isOpen, onClose, onSave, editEvent }: AddEventMo
     onClose();
   };
 
+  const handleDelete = () => {
+    if (!editEvent || !onDelete) return;
+    onDelete(editEvent.id);
+    onClose();
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -71,9 +78,9 @@ export function AddEventModal({ isOpen, onClose, onSave, editEvent }: AddEventMo
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
           >
-            <div className="glass-card w-full max-w-sm rounded-3xl p-6 pointer-events-auto shadow-2xl">
+            <div className="glass-card w-full max-w-sm rounded-3xl pointer-events-auto shadow-2xl flex flex-col max-h-[calc(100vh-2rem)] overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {editEvent ? '编辑事件' : '添加事件'}
                 </h2>
@@ -86,7 +93,7 @@ export function AddEventModal({ isOpen, onClose, onSave, editEvent }: AddEventMo
               </div>
 
               {/* Form */}
-              <div className="space-y-5">
+              <div className="space-y-5 px-6 overflow-y-auto flex-1 min-h-0 momentum-scroll">
                 {/* Title input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -97,6 +104,7 @@ export function AddEventModal({ isOpen, onClose, onSave, editEvent }: AddEventMo
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="例如：生日、纪念日..."
+                    maxLength={32}
                     className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                     autoFocus
                   />
@@ -220,7 +228,16 @@ export function AddEventModal({ isOpen, onClose, onSave, editEvent }: AddEventMo
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 mt-8">
+              <div className="flex gap-3 px-6 pt-4 pb-6 flex-shrink-0 border-t border-gray-200/50 dark:border-gray-700/50">
+                {editEvent && onDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                  >
+                    删除
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onClose}

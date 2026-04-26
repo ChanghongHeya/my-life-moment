@@ -2,10 +2,28 @@ import { useEffect, useRef } from 'react';
 import { calculateDaysUntil } from '@/data/conferences';
 import type { Conference } from '@/data/conferences';
 
-// Check if notifications are supported and permitted
+const NOTIFICATION_CACHE_KEY = 'life-moment-deadline-notifications-v1';
+
+function readNotificationCache(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_CACHE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeNotificationCache(cache: Record<string, string>): void {
+  localStorage.setItem(NOTIFICATION_CACHE_KEY, JSON.stringify(cache));
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!('Notification' in window)) {
-    console.log('This browser does not support notifications');
     return false;
   }
 
@@ -21,72 +39,84 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return false;
 }
 
-// Send notification
-export function sendNotification(title: string, body: string, icon?: string) {
-  if (Notification.permission === 'granted') {
-    new Notification(title, {
-      body,
-      icon: icon || '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
-      tag: 'ddl-reminder',
-      requireInteraction: true,
-    });
+export function sendNotification(title: string, body: string, icon?: string): void {
+  if (Notification.permission !== 'granted') {
+    return;
   }
+
+  new Notification(title, {
+    body,
+    icon: icon ?? '/icons/icon-192x192.png',
+    badge: '/icons/icon-72x72.png',
+    tag: 'ddl-reminder',
+    requireInteraction: true,
+  });
 }
 
-// Hook to check deadlines and send notifications
 export function useDeadlineNotifications(
   favorites: string[],
   conferences: Conference[],
-  reminderDays: number = 7
+  reminderDays = 7,
 ) {
   const lastCheckRef = useRef<string>('');
 
   useEffect(() => {
-    // Request permission on mount
-    requestNotificationPermission();
+    const checkDeadlines = async () => {
+      const hasPermission = await requestNotificationPermission();
+      if (!hasPermission) {
+        return;
+      }
 
-    const checkDeadlines = () => {
       const now = new Date();
-      const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-      
-      // Only check once per day
-      if (lastCheckRef.current === todayKey) return;
-      lastCheckRef.current = todayKey;
+      const dayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
 
-      favorites.forEach(confId => {
-        const conf = conferences.find(c => c.id === confId);
-        if (!conf) return;
+      if (lastCheckRef.current === dayKey) {
+        return;
+      }
 
-        conf.deadlines.forEach(deadline => {
+      lastCheckRef.current = dayKey;
+      const cache = readNotificationCache();
+
+      favorites.forEach((conferenceId) => {
+        const conference = conferences.find((item) => item.id === conferenceId);
+        if (!conference) {
+          return;
+        }
+
+        conference.deadlines.forEach((deadline) => {
           const days = calculateDaysUntil(deadline.date);
-          
-          // Send notification for urgent deadlines
-          if (days >= 0 && days <= reminderDays) {
-            const deadlineType = deadline.type === 'abstract' ? '摘要' : 
-                                deadline.type === 'paper' ? '论文' : 
-                                deadline.type;
-            
-            sendNotification(
-              `⏰ ${conf.name} ${deadlineType}截止提醒`,
-              `还有 ${days} 天！截止日期：${deadline.date} (${deadline.timezone})`,
-            );
+          const notificationKey = `${conference.id}:${deadline.id}:${dayKey}`;
+
+          if (days < 0 || days > reminderDays || cache[notificationKey]) {
+            return;
           }
+
+          const deadlineType = deadline.type === 'abstract'
+            ? '摘要'
+            : deadline.type === 'paper'
+              ? '论文'
+              : deadline.type;
+
+          sendNotification(
+            `⏰ ${conference.name} ${deadlineType}截止提醒`,
+            `还有 ${days} 天，截止日期 ${deadline.date}（${deadline.timezone}）。`,
+          );
+          cache[notificationKey] = now.toISOString();
         });
       });
+
+      writeNotificationCache(cache);
     };
 
-    // Check immediately
-    checkDeadlines();
+    void checkDeadlines();
+    const interval = window.setInterval(() => {
+      void checkDeadlines();
+    }, 60 * 60 * 1000);
 
-    // Check every hour
-    const interval = setInterval(checkDeadlines, 60 * 60 * 1000);
-
-    return () => clearInterval(interval);
+    return () => window.clearInterval(interval);
   }, [favorites, conferences, reminderDays]);
 }
 
-// Hook for browser tab title notification
 export function useTabTitleNotification(favorites: string[], conferences: Conference[]) {
   useEffect(() => {
     const updateTitle = () => {
@@ -96,31 +126,32 @@ export function useTabTitleNotification(favorites: string[], conferences: Confer
       }
 
       let minDays = Infinity;
-      let urgentConf = '';
+      let urgentConference = '';
 
-      favorites.forEach(confId => {
-        const conf = conferences.find(c => c.id === confId);
-        if (!conf) return;
+      favorites.forEach((conferenceId) => {
+        const conference = conferences.find((item) => item.id === conferenceId);
+        if (!conference) {
+          return;
+        }
 
-        conf.deadlines.forEach(deadline => {
+        conference.deadlines.forEach((deadline) => {
           const days = calculateDaysUntil(deadline.date);
           if (days >= 0 && days < minDays) {
             minDays = days;
-            urgentConf = conf.name;
+            urgentConference = conference.name;
           }
         });
       });
 
-      if (minDays <= 7 && minDays !== Infinity) {
-        document.title = `⏰ ${minDays}天 - ${urgentConf} | Life Moment`;
+      if (minDays <= 7 && Number.isFinite(minDays)) {
+        document.title = `⏰ ${minDays}天 - ${urgentConference} | Life Moment`;
       } else {
         document.title = 'Life Moment - 美好时刻';
       }
     };
 
     updateTitle();
-    const interval = setInterval(updateTitle, 60 * 1000); // Update every minute
-
-    return () => clearInterval(interval);
+    const interval = window.setInterval(updateTitle, 60 * 1000);
+    return () => window.clearInterval(interval);
   }, [favorites, conferences]);
 }

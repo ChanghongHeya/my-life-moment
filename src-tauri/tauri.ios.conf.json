@@ -1,0 +1,21 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Life Moment",
+        "width": 430,
+        "height": 932,
+        "resizable": true,
+        "maximizable": true,
+        "minimizable": true,
+        "transparent": false,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "visible": true,
+        "shadow": true
+      }
+    ]
+  }
+}

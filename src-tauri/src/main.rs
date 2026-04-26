@@ -1,49 +1,36 @@
-// Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{ActivationPolicy, Manager, PhysicalPosition, Position, Runtime, TrayIcon, TrayIconBuilder, WebviewWindow};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::{ActivationPolicy, Emitter, Manager, Runtime, WebviewWindow, WindowEvent};
+use tauri_plugin_positioner::{Position, WindowExt};
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_positioner::init())
         .setup(|app| {
-            // Set activation policy to Accessory for menu bar app behavior
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(ActivationPolicy::Accessory);
-
-            // Create the tray icon
-            let tray = create_tray(app)?;
-            
-            // Handle tray icon events
-            tray.on_tray_icon_event(|tray, event| {
-                if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                    toggle_window(tray.app_handle());
-                }
-            });
-
-            // Get the main window and hide it initially
-            let window = app.get_webview_window("main").unwrap();
-            
-            // Position window near the menu bar on macOS
             #[cfg(target_os = "macos")]
             {
-                position_window_near_tray(&window);
+                app.set_activation_policy(ActivationPolicy::Accessory);
+                let _tray = create_tray(app)?;
             }
-            
-            // Hide window initially (menu bar style)
-            window.hide().unwrap();
 
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(target_os = "macos")]
             match event {
-                // Hide window when it loses focus (click outside)
-                tauri::WindowEvent::Focused(is_focused) => {
-                    if !is_focused {
-                        window.hide().unwrap();
-                    }
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                WindowEvent::Focused(focused) => {
+                    let _ = window.emit("window-focus-changed", *focused);
                 }
                 _ => {}
             }
@@ -52,77 +39,117 @@ fn main() {
         .expect("error while running tauri application");
 }
 
-fn create_tray<R: Runtime>(app: &tauri::App<R>) -> Result Result<TrayIcon<R>, Box<dyn std::error::Error>> {
-    // Create menu items
-    let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let show_i = MenuItem::with_id(app, "show", "显示 Life Moment", true, None::<&str>)?;
+#[cfg(target_os = "macos")]
+fn create_tray<R: Runtime>(app: &tauri::App<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {
+    let quit_item = MenuItem::with_id(app, "quit", "退出 Life Moment", true, None::<&str>)?;
+    let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    
-    // Create menu
-    let menu = Menu::with_items(app, &[
-        &show_i,
-        &separator,
-        &quit_i,
-    ])?;
 
-    // Build tray icon
-    let tray = TrayIconBuilder::new()
+    let menu = Menu::with_items(app, &[&show_item, &separator, &quit_item])?;
+
+    let tray = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "quit" => {
-                    app.exit(0);
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "quit" => app.exit(0),
+            "show" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.center();
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
                 }
-                "show" => {
-                    toggle_window(app);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            eprintln!("[tray event] {:?}", event);
+            // Forward event to positioner plugin to capture tray position
+            tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
+
+            if let TrayIconEvent::Click {
+                button,
+                button_state,
+                ..
+            } = event
+            {
+                eprintln!("[tray click] button={:?} state={:?}", button, button_state);
+                if button == MouseButton::Left && button_state == MouseButtonState::Up {
+                    eprintln!("[tray] triggering toggle_popover");
+                    toggle_popover(tray.app_handle());
                 }
-                _ => {}
             }
         })
-        .icon(app.default_window_icon().unwrap().clone())
-        .icon_as_template(true)
-        .tooltip("Life Moment - 美好时刻")
+        .icon(load_tray_icon())
+        .icon_as_template(false)
+        .tooltip("Life Moment")
         .build(app)?;
 
     Ok(tray)
 }
 
-fn toggle_window<R: Runtime>(app: &tauri::AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            window.hide().unwrap();
-        } else {
-            #[cfg(target_os = "macos")]
-            position_window_near_tray(&window);
-            window.show().unwrap();
-            window.set_focus().unwrap();
-        }
-    }
+#[cfg(not(target_os = "macos"))]
+fn create_tray<R: Runtime>(_app: &tauri::App<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {
+    unreachable!()
 }
 
 #[cfg(target_os = "macos")]
-fn position_window_near_tray<R: Runtime>(window: &WebviewWindow<R>) {
-    use tauri::Monitor;
-    
-    if let Ok(Some(monitor)) = window.current_monitor() {
-        let monitor_size = monitor.size();
-        let monitor_pos = monitor.position();
-        
-        // Get window size
-        let window_size = window.outer_size().unwrap_or(tauri::Size::Physical(tauri::PhysicalSize { 
-            width: 380, 
-            height: 600 
-        }));
-        
-        // Position in the top-right area (menu bar area)
-        let x = monitor_pos.x + (monitor_size.width as i32) - (window_size.width as i32) - 10;
-        let y = 25; // Offset from top for menu bar
-        
-        window.set_position(Position::Physical(PhysicalPosition { x, y })).ok();
+fn toggle_popover<R: Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let visible = window.is_visible().unwrap_or(false);
+        eprintln!("[toggle_popover] window visible={}", visible);
+        if visible {
+            let _ = window.hide();
+            eprintln!("[toggle_popover] hid window");
+        } else {
+            // Position below tray icon
+            match window.move_window(Position::TrayCenter) {
+                Ok(_) => eprintln!("[toggle_popover] moved to TrayCenter"),
+                Err(e) => eprintln!("[toggle_popover] move failed: {:?}", e),
+            }
+            let _ = window.show();
+            let _ = window.set_focus();
+            eprintln!("[toggle_popover] showed window");
+        }
+    } else {
+        eprintln!("[toggle_popover] ERROR: main window not found");
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn position_window_near_tray<R: Runtime>(_window: &WebviewWindow<R>) {
-    // No-op for non-macOS platforms
+fn load_tray_icon() -> tauri::image::Image<'static> {
+    let png_bytes = include_bytes!("../icons/tray-icon.png");
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().expect("valid tray icon PNG");
+    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).expect("valid tray icon frame");
+    buf.truncate(info.buffer_size());
+    let width = info.width;
+    let height = info.height;
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => buf,
+        png::ColorType::Rgb => {
+            let mut out = Vec::with_capacity((width * height * 4) as usize);
+            for px in buf.chunks_exact(3) {
+                out.extend_from_slice(&[px[0], px[1], px[2], 255]);
+            }
+            out
+        }
+        png::ColorType::Grayscale => {
+            let mut out = Vec::with_capacity((width * height * 4) as usize);
+            for &g in &buf {
+                out.extend_from_slice(&[g, g, g, 255]);
+            }
+            out
+        }
+        png::ColorType::GrayscaleAlpha => {
+            let mut out = Vec::with_capacity((width * height * 4) as usize);
+            for px in buf.chunks_exact(2) {
+                out.extend_from_slice(&[px[0], px[0], px[0], px[1]]);
+            }
+            out
+        }
+        other => panic!("unsupported tray icon color type: {:?}", other),
+    };
+    tauri::image::Image::new_owned(rgba, width, height)
 }

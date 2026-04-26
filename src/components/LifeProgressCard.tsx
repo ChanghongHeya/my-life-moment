@@ -17,9 +17,9 @@ export function LifeProgressCard({ event }: LifeProgressCardProps) {
   const ageYears = Math.max(ageInMs / YEAR_MS, 0);
   const progress = Math.min(Math.max((ageYears / LIFE_EXPECTANCY_YEARS) * 100, 0), 100);
   const strokeDashoffset = CIRCLE_CIRCUMFERENCE - (progress / 100) * CIRCLE_CIRCUMFERENCE;
-  const ageText = `${ageYears.toFixed(2)} Year`;
+  const ageText = `${ageYears.toFixed(2)} 岁`;
   const progressText = `${progress.toFixed(2)}%`;
-  const statusText = progress >= 100 ? 'Complete' : 'Passed';
+  const statusText = progress >= 100 ? '已完成' : '已走过';
 
   return (
     <motion.div
@@ -63,7 +63,7 @@ export function LifeProgressCard({ event }: LifeProgressCardProps) {
             {event.title}
           </h3>
           <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 break-words">
-            Life · {ageText} / {LIFE_EXPECTANCY_YEARS} Year · {statusText}
+            人生旅程 · {ageText} / {LIFE_EXPECTANCY_YEARS} 岁 · {statusText}
           </p>
         </div>
 

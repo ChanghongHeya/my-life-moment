@@ -59,10 +59,10 @@ export function ConferencePool({ favorites, onToggleFavorite }: ConferencePoolPr
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="h-full flex flex-col"
+      className="h-full flex flex-col min-h-0"
     >
       {/* Filter Bar */}
-      <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-700/50 space-y-3">
+      <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-700/50 space-y-3 flex-shrink-0">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -117,7 +117,7 @@ export function ConferencePool({ favorites, onToggleFavorite }: ConferencePoolPr
       </div>
 
       {/* Conference List */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-6">
         {groupedConferences.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">没有找到符合条件的会议</p>

@@ -1,7 +1,7 @@
 {
   "name": "Life Moment - 美好时刻",
   "short_name": "Life Moment",
-  "description": "记录生活中的美好时刻",
+  "description": "单用户的生活倒计时与学术 DDL 管理工具。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -47,7 +47,7 @@
       "type": "image/png"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
